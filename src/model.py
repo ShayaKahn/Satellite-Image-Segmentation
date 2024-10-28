@@ -7,6 +7,16 @@ from tensorflow.keras.layers import Conv2DTranspose
 from tensorflow.keras.layers import concatenate
 
 class UnetModel(tf.keras.Model):
+    """
+    This class implements the U-Net model.
+    Parameters:
+    - n_filters: The number of filters in the convolutional layers.
+    - dropout_prob: The dropout probability.
+    - max_pooling: Boolean, whether to use max pooling or not.
+    - kernel_size: The size of the convolutional kernel.
+    - input_size: The size of the input images.
+    - n_classes: The number of classes in the segmentation task.
+    """
     def __init__(self, n_filters, dropout_prob, max_pooling, kernel_size,
                  input_size=(128, 128, 3), n_classes=7):
         super(UnetModel, self).__init__()
@@ -19,20 +29,26 @@ class UnetModel(tf.keras.Model):
 
     def _conv_block(self, n_filters, inputs=None, dropout_prob=0,
                     max_pooling=True):
+        """
+        Create a convolutional block.
+        """
         conv = Conv2D(n_filters, self.kernel_size, activation='relu',
                       padding='same', kernel_initializer='he_normal')(inputs)
         conv = Conv2D(n_filters, self.kernel_size, activation='relu',
                       padding='same', kernel_initializer='he_normal')(conv)
         if dropout_prob > 0:
-            conv = tf.keras.layers.Dropout(dropout_prob)(conv)
+            conv = Dropout(dropout_prob)(conv)
         if max_pooling:
-            next_layer = tf.keras.layers.MaxPooling2D(pool_size=(2, 2))(conv)
+            next_layer = MaxPooling2D(pool_size=(2, 2))(conv)
         else:
             next_layer = conv
         skip_connection = conv
         return next_layer, skip_connection
 
     def _upsampling_block(self, n_filters, expansive_input, contractive_input):
+        """
+        Create an upsampling block.
+        """
         up = Conv2DTranspose(n_filters, (self.kernel_size,
                              self.kernel_size), strides=(2,2),
                              padding='same')(expansive_input)
@@ -44,6 +60,9 @@ class UnetModel(tf.keras.Model):
         return conv
 
     def call(self):
+        """
+        Build the U-Net model.
+        """
         inputs = Input(self.input_size)
         cblock1 = self._conv_block(self.n_filters, inputs)
         cblock2 = self._conv_block(2*self.n_filters, cblock1[0])
@@ -72,8 +91,7 @@ class DiceCCE(tf.keras.losses.Loss):
     def __init__(self, from_logits=False, smooth=1e-16, alpha=0.5, name="combined_dice_cce_loss"):
         """
         Combined loss function of Dice Loss and Categorical Cross-Entropy.
-
-        Args:
+        Parameters:
         - from_logits: Boolean, whether `y_pred` is from logits (raw values) or probabilities.
         - smooth: Smoothing factor to prevent division by zero.
         - alpha: Weighting factor to control the contribution of Dice loss and Categorical Cross-Entropy loss.
@@ -88,16 +106,15 @@ class DiceCCE(tf.keras.losses.Loss):
     def dice_loss(self, y_true, y_pred):
         """
         Computes the generalized Dice loss.
-
-        Args:
+        Inputs:
         - y_true: Ground truth labels, expected to be one-hot encoded.
                   Shape: (batch_size, height, width, num_classes).
         - y_pred: Predicted labels, can be logits or probabilities.
                   Shape: (batch_size, height, width, num_classes).
-
         Returns:
         - loss: Computed Dice loss.
         """
+        # If logits are passed, convert them to probabilities using softmax
         if self.from_logits:
             y_pred = tf.nn.softmax(y_pred)
 
@@ -141,8 +158,7 @@ class DiceLoss(tf.keras.losses.Loss):
     def __init__(self, from_logits=False, smooth=1e-16, name="dice_loss"):
         """
         Custom Dice Loss function for multi-class segmentation.
-
-        Args:
+        Parameters:
         - from_logits: Boolean, whether `y_pred` is from logits (raw values) or probabilities.
         - smooth: Smoothing factor to prevent division by zero.
         - name: Optional name for the loss function.
@@ -154,13 +170,11 @@ class DiceLoss(tf.keras.losses.Loss):
     def call(self, y_true, y_pred):
         """
         Computes the Dice loss.
-
-        Args:
+        Inputs:
         - y_true: Ground truth labels, expected to be one-hot encoded.
                   Shape: (batch_size, height, width, num_classes).
         - y_pred: Predicted labels, can be logits or probabilities.
                   Shape: (batch_size, height, width, num_classes).
-
         Returns:
         - loss: Computed Dice loss.
         """

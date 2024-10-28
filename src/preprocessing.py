@@ -6,6 +6,11 @@ from tensorflow.keras.layers import RandomRotation, RandomCrop, RandomFlip
 def create_shuffled_dataset(image_list, mask_list):
     """
     Create a shuffled dataset from the image and mask lists.
+    Inputs:
+    - image_list: A list of image file paths.
+    - mask_list: A list of mask file paths.
+    Returns:
+    - dataset: A tf.data.Dataset object containing the image and mask file paths.
     """
     # transform to numpy arrays
     image_list_array = np.array(image_list)
@@ -29,6 +34,15 @@ def create_shuffled_dataset(image_list, mask_list):
     return dataset
 
 def process_path(image_path, mask_path):
+    """
+    Process the image and mask paths.
+    Inputs:
+    - image_path: The file path of the image.
+    - mask_path: The file path of the mask.
+    Returns:
+    - img: The image tensor.
+    - mask: The mask tensor.
+    """
     # process the image path
     img = tf.io.read_file(image_path)
     img = tf.image.decode_jpeg(img, channels=3)
@@ -42,6 +56,16 @@ def process_path(image_path, mask_path):
 
 
 def preprocess(image, mask, size=256):
+    """
+    Preprocess the image and mask.
+    Inputs:
+    - image: The image tensor.
+    - mask: The mask tensor.
+    - size: The size to resize the image and mask to.
+    Returns:
+    - input_image: The preprocessed image tensor.
+    - input_mask: The preprocessed mask tensor.
+    """
     # Resize the images and the masks
     input_image = tf.image.resize(image, (size, size), method='nearest')
     input_mask = tf.image.resize(mask, (size, size), method='nearest')
@@ -49,24 +73,55 @@ def preprocess(image, mask, size=256):
     return input_image, input_mask
 
 def divide_tensor(image, mask):
-    top_left = tf.slice(image, [0, 0, 0], [1224, 1224, 3])
-    top_right = tf.slice(image, [0, 1224, 0], [1224, 1224, 3])
-    bottom_left = tf.slice(image, [1224, 0, 0], [1224, 1224, 3])
-    bottom_right = tf.slice(image, [1224, 1224, 0], [1224, 1224, 3])
+    """
+    Divide the image and mask tensors into four equal parts.
+    Inputs:
+    - image: The image tensor.
+    - mask: The mask tensor.
+    Returns:
+    - subimages: A list of the four subimages.
+    - submasks: A list of the four submasks.
+    """
 
-    top_left_mask = tf.slice(mask, [0, 0, 0], [1224, 1224, 3])
-    top_right_mask = tf.slice(mask, [0, 1224, 0], [1224, 1224, 3])
-    bottom_left_mask = tf.slice(mask, [1224, 0, 0], [1224, 1224, 3])
-    bottom_right_mask = tf.slice(mask, [1224, 1224, 0], [1224, 1224, 3])
+    size = 1224
 
-    return [top_left, top_right, bottom_left, bottom_right], [top_left_mask, top_right_mask, bottom_left_mask, bottom_right_mask]
+    top_left = tf.slice(image, [0, 0, 0], [size, size, 3])
+    top_right = tf.slice(image, [0, size, 0], [size, size, 3])
+    bottom_left = tf.slice(image, [size, 0, 0], [size, size, 3])
+    bottom_right = tf.slice(image, [size, size, 0], [size, size, 3])
+
+    top_left_mask = tf.slice(mask, [0, 0, 0], [size, size, 3])
+    top_right_mask = tf.slice(mask, [0, size, 0], [size, size, 3])
+    bottom_left_mask = tf.slice(mask, [size, 0, 0], [size, size, 3])
+    bottom_right_mask = tf.slice(mask, [size, size, 0], [size, size, 3])
+
+    return ([top_left, top_right, bottom_left, bottom_right],
+            [top_left_mask, top_right_mask, bottom_left_mask, bottom_right_mask])
 
 def expand_tensor(image, mask):
+    """
+    Expand the image and mask tensors into four equal parts.
+    Inputs:
+    - image: The image tensor.
+    - mask: The mask tensor.
+    Returns:
+    - subimages: A list of the four subimages.
+    - submasks: A list of the four submasks.
+    """
     subimages, submasks = divide_tensor(image, mask)
 
     return subimages, submasks
 
 def preprocess_pipeline(image_list, mask_list, divide=False):
+    """
+    Create a preprocessed dataset from the image and mask lists.
+    Inputs:
+    - image_list: A list of image file paths.
+    - mask_list: A list of mask file paths.
+    - divide: A boolean indicating whether to divide the images and masks into four equal parts.
+    Returns:
+    - processed_image_ds: A preprocessed dataset containing the images and masks.
+    """
     dataset = create_shuffled_dataset(image_list, mask_list)
     image_ds = dataset.map(process_path)
     if divide:
@@ -75,7 +130,20 @@ def preprocess_pipeline(image_list, mask_list, divide=False):
     return processed_image_ds
 
 def split(train_frac, val_frac, dataset):
-    # Split the dataset into training, validation and test sets
+    """
+    Split the dataset into training, validation, and test sets.
+    Inputs:
+    - train_frac: The fraction of the dataset to use for training.
+    - val_frac: The fraction of the dataset to use for validation.
+    - dataset: The dataset to split.
+    Returns:
+    - train_dataset: The training dataset.
+    - val_dataset: The validation dataset.
+    - test_dataset: The test dataset.
+    - train_size: The size of the training dataset.
+    - val_size: The size of the validation dataset.
+    """
+    # Find the size of the dataset
     dataset_size = int(dataset.__len__())
 
     train_size = int(train_frac * dataset_size)
@@ -89,6 +157,15 @@ def split(train_frac, val_frac, dataset):
     return train_dataset, val_dataset, test_dataset, train_size, val_size
 
 class Augment(tf.keras.layers.Layer):
+    """
+    Custom layer to apply augmentations to images and masks.
+    Parameters:
+    - seed: The random seed for the augmentations.
+    - crop_height: The height of the cropped image.
+    - crop_width: The width of the cropped image.
+    - target_height: The target height of the resized image.
+    - target_width: The target width of the resized image.
+    """
     def __init__(self, seed=42, crop_height=96, crop_width=96, target_height=256, target_width=256):
         super().__init__()
 
@@ -109,6 +186,15 @@ class Augment(tf.keras.layers.Layer):
         ])
 
     def call(self, image, mask):
+        """
+        Apply augmentations to the image and mask.
+        Inputs:
+        - image: The image tensor.
+        - mask: The mask tensor.
+        Returns:
+        - image: The augmented image tensor.
+        - mask: The augmented mask tensor.
+        """
         # Apply augmentations
         image = self.augment_image(image)
         image = tf.cast(image, dtype=tf.float32)
@@ -121,10 +207,8 @@ class Augment(tf.keras.layers.Layer):
 def map_rgb_to_class(mask):
     """
     Converts RGB mask values to class indices.
-
-    Parameters:
+    Inputs:
     - mask: A TensorFlow tensor of shape (height, width, 3).
-
     Returns:
     - A tensor of shape (height, width) with class indices.
     """
@@ -139,7 +223,7 @@ def map_rgb_to_class(mask):
         (0, 0, 255): 3,     # Blue
         (255, 0, 255): 4,   # Magenta
         (0, 255, 255): 5,   # Cyan
-        (255, 255, 255): 6, # White
+        (255, 255, 255): 6,  # White
     }
 
     # Create an empty tensor to hold class indices with the same shape as the height and width of the mask
@@ -161,11 +245,9 @@ def map_rgb_to_class(mask):
 def modify_mask(img, mask):
     """
     Converts the RGB mask into class indices using the map_rgb_to_class function.
-
-    Parameters:
+    Inputs:
     - img: Image tensor of shape (height, width, 3).
     - mask: RGB mask tensor of shape (height, width, 3).
-
     Returns:
     - img: Unmodified image.
     - mask: Modified mask with class indices of shape (height, width).
@@ -175,72 +257,14 @@ def modify_mask(img, mask):
     return img, class_mask
 
 def one_hot(img, mask):
+    """
+    Convert the mask to one-hot encoding.
+    Inputs:
+    - img: The image tensor.
+    - mask: The mask tensor.
+    Returns:
+    - img: The image tensor.
+    - mask: The one-hot encoded mask tensor.
+    """
     mask = tf.one_hot(mask, depth=7, axis=-1, dtype=tf.float32)
     return img, mask
-
-
-#class Augment(tf.keras.layers.Layer):
-#    def __init__(self, seed, crop_height, crop_width, target_height, target_width):
-#        super().__init__()
-
-        # Augmentation pipeline for images
-#        self.augment_image = tf.keras.Sequential([
-#            RandomFlip("horizontal_and_vertical", seed=seed),
-#            RandomRotation(0.2, seed=seed),
-#            RandomCrop(crop_height, crop_width, seed=seed),
-#            tf.keras.layers.Resizing(target_height, target_width)
-#        ])
-
-        # Augmentation pipeline for masks (same augmentations to ensure consistency)
-#        self.augment_mask = tf.keras.Sequential([
-#            RandomFlip("horizontal_and_vertical", seed=seed),
-#            RandomRotation(0.2, seed=seed),
-#            RandomCrop(crop_height, crop_width, seed=seed),
-#            tf.keras.layers.Resizing(target_height, target_width)
-#        ])
-
-#    def call(self, image, mask):
-#        # Apply augmentations
-#        image = self.augment_image(image)
-#        image = tf.cast(image, dtype=tf.float32)
-
-#        mask = self.augment_mask(mask)
-#        mask = tf.cast(mask, dtype=tf.uint8)
-
-#        return image, mask
-
-# Encode the lables of the classes
-#def eager_modify(element):
-#    """
-#    Reduce the channels of the mask to 1 by encoding the classes.
-#    """
-#    # transform to numpy array
-#    element_numpy = element.numpy()
-#    scaled_mask = element_numpy / 255.0
-#    # Encode the classes
-#    bool_mask = scaled_mask[:, :, 1] != 0
-#    scaled_mask[:, :, 1][bool_mask] = 2
-#    bool_mask = scaled_mask[:, :, 2] != 0
-#    scaled_mask[:, :, 2][bool_mask] = 5
-#    summed_mask = scaled_mask.sum(-1)
-#    expanded_summed_mask = np.expand_dims(summed_mask, axis=-1).astype(np.uint8)
-#    expanded_summed_mask[expanded_summed_mask == 2] = 1
-#    expanded_summed_mask[expanded_summed_mask == 3] = 2
-#    expanded_summed_mask[expanded_summed_mask == 5] = 3
-#    expanded_summed_mask[expanded_summed_mask == 6] = 4
-#    expanded_summed_mask[expanded_summed_mask == 7] = 5
-#
-#    return expanded_summed_mask
-
-#def modify_mask(img, mask, size):
-#    """
-#    Modify the mask.
-#    """
-#    element = mask
-#    modified_element = tf.py_function(func=eager_modify, inp=[element],
-#                                      Tout=tf.uint8)
-
-#    modified_element.set_shape((size, size, 1))
-
-#    return img, modified_element
-

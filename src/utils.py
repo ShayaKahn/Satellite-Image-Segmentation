@@ -7,6 +7,11 @@ import numpy as np
 def get_image_mask_list(path):
     """
     Get the list of images and masks in the path.
+    Inputs:
+    -path: The path to the images and masks.
+    Returns:
+    - image_list: The list of image file names.
+    - mask_list: The list of mask file names.
     """
     image_list = []
     mask_list = []
@@ -20,6 +25,15 @@ def get_image_mask_list(path):
 
 
 def sort_image_mask_lists(image_list, mask_list):
+    """
+    Sort the image and mask lists.
+    Inputs:
+    - image_list: The list of image file names.
+    - mask_list: The list of mask file names.
+    Returns:
+    - image_list_sorted: The sorted list of image file names.
+    - mask_list_sorted: The sorted list of mask file names.
+    """
     image_list_sorted = sorted(image_list)
     mask_list_sorted = sorted(mask_list)
     return image_list_sorted, mask_list_sorted
@@ -27,6 +41,8 @@ def sort_image_mask_lists(image_list, mask_list):
 def display_image_mask(display_list):
     """
     Display an image, its ground true mask, and its predicted mask.
+    Inputs:
+    - display_list: A list of the image, ground true mask, and predicted mask.
     """
     plt.figure(figsize=(10, 10))
 
@@ -41,6 +57,15 @@ def display_image_mask(display_list):
 
 
 def create_confusion_matrix(real_mask_lst, pred_mask_lst, n_classes):
+    """
+    Create the confusion matrix.
+    Inputs:
+    - real_mask_lst: A list of real masks.
+    - pred_mask_lst: A list of predicted masks.
+    - n_classes: The number of classes.
+    Returns:
+    - cm: The confusion matrix.
+    """
     # Initialize the confusion matrix
     cm = np.zeros((n_classes, n_classes), dtype=int)
 
@@ -55,6 +80,9 @@ def create_confusion_matrix(real_mask_lst, pred_mask_lst, n_classes):
     return cm
 
 class MeanIoU(tf.keras.metrics.MeanIoU):
+    """
+    This class extends the MeanIoU class from tf.keras.metrics.
+    """
     def __init__(self, num_classes, name=None, dtype=None):
         super(MeanIoU, self).__init__(num_classes=num_classes,
                                       name=name, dtype=dtype)
