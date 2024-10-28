@@ -63,7 +63,128 @@ class UnetModel(tf.keras.Model):
                        activation='relu', padding='same',
                        kernel_initializer='he_normal')(ublock9)
 
-        conv10 = Conv2D(self.n_classes, (1, 1), padding='same')(conv9)
+        conv10 = Conv2D(self.n_classes, (1,1), padding='same')(conv9)
 
         model = tf.keras.Model(inputs=inputs, outputs=conv10)
         return model
+
+class DiceCCE(tf.keras.losses.Loss):
+    def __init__(self, from_logits=False, smooth=1e-16, alpha=0.5, name="combined_dice_cce_loss"):
+        """
+        Combined loss function of Dice Loss and Categorical Cross-Entropy.
+
+        Args:
+        - from_logits: Boolean, whether `y_pred` is from logits (raw values) or probabilities.
+        - smooth: Smoothing factor to prevent division by zero.
+        - alpha: Weighting factor to control the contribution of Dice loss and Categorical Cross-Entropy loss.
+        - name: Optional name for the loss function.
+        """
+        super().__init__(name=name)
+        self.from_logits = from_logits
+        self.smooth = smooth
+        self.alpha = alpha
+        self.cce = tf.keras.losses.CategoricalCrossentropy(from_logits=from_logits)
+
+    def dice_loss(self, y_true, y_pred):
+        """
+        Computes the generalized Dice loss.
+
+        Args:
+        - y_true: Ground truth labels, expected to be one-hot encoded.
+                  Shape: (batch_size, height, width, num_classes).
+        - y_pred: Predicted labels, can be logits or probabilities.
+                  Shape: (batch_size, height, width, num_classes).
+
+        Returns:
+        - loss: Computed Dice loss.
+        """
+        if self.from_logits:
+            y_pred = tf.nn.softmax(y_pred)
+
+        num_classes = tf.shape(y_true)[-1]
+        y_true_f = tf.reshape(y_true, [-1, num_classes])
+        y_pred_f = tf.reshape(y_pred, [-1, num_classes])
+
+        y_true_f = tf.cast(y_true_f, tf.float32)
+        y_pred_f = tf.cast(y_pred_f, tf.float32)
+
+        intersection = tf.reduce_sum(y_true_f * y_pred_f, axis=0)
+        union = tf.reduce_sum(y_true_f, axis=0) + tf.reduce_sum(y_pred_f, axis=0)
+
+        dice_per_class = (2. * intersection + self.smooth) / (union + self.smooth)
+
+        return 1.0 - dice_per_class
+
+    def call(self, y_true, y_pred):
+        """
+        Computes the combined Dice loss and Categorical Cross-Entropy loss.
+
+        Args:
+        - y_true: Ground truth labels.
+        - y_pred: Predicted labels.
+
+        Returns:
+        - loss: Combined loss (alpha * Dice loss + (1 - alpha) * Categorical Cross-Entropy loss).
+        """
+        # Calculate Dice loss
+        dice_loss_value = self.dice_loss(y_true, y_pred)
+
+        # Calculate Categorical Cross-Entropy loss
+        cce_loss_value = self.cce(y_true, y_pred)
+
+        # Combine the losses using the alpha weighting factor
+        combined_loss = self.alpha * dice_loss_value + (1 - self.alpha) * cce_loss_value
+
+        return combined_loss
+
+class DiceLoss(tf.keras.losses.Loss):
+    def __init__(self, from_logits=False, smooth=1e-16, name="dice_loss"):
+        """
+        Custom Dice Loss function for multi-class segmentation.
+
+        Args:
+        - from_logits: Boolean, whether `y_pred` is from logits (raw values) or probabilities.
+        - smooth: Smoothing factor to prevent division by zero.
+        - name: Optional name for the loss function.
+        """
+        super().__init__(name=name)
+        self.from_logits = from_logits
+        self.smooth = smooth
+
+    def call(self, y_true, y_pred):
+        """
+        Computes the Dice loss.
+
+        Args:
+        - y_true: Ground truth labels, expected to be one-hot encoded.
+                  Shape: (batch_size, height, width, num_classes).
+        - y_pred: Predicted labels, can be logits or probabilities.
+                  Shape: (batch_size, height, width, num_classes).
+
+        Returns:
+        - loss: Computed Dice loss.
+        """
+        # If logits are passed, convert them to probabilities using softmax
+        if self.from_logits:
+            y_pred = tf.nn.softmax(y_pred)
+
+        # Calculate the number of classes
+        num_classes = tf.shape(y_true)[-1]
+
+        # Flatten the tensors to compute Dice coefficient
+        y_true_f = tf.reshape(y_true, [-1, num_classes])
+        y_pred_f = tf.reshape(y_pred, [-1, num_classes])
+
+        # Cast to float32 for computation
+        y_true_f = tf.cast(y_true_f, tf.float32)
+        y_pred_f = tf.cast(y_pred_f, tf.float32)
+
+        # Compute the intersection and the union for each class separately
+        intersection = tf.reduce_sum(y_true_f * y_pred_f, axis=0)  # Sum over all voxels, for each class
+        union = tf.reduce_sum(y_true_f, axis=0) + tf.reduce_sum(y_pred_f, axis=0)  # Sum over all voxels, for each class
+
+        # Compute Dice coefficient for each class
+        dice_per_class = (2. * intersection + self.smooth) / (union + self.smooth)
+
+        # Return the Dice loss (1 - Dice coefficient)
+        return 1.0 - dice_per_class

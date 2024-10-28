@@ -39,6 +39,7 @@ def display_image_mask(display_list):
         plt.axis('off')
     plt.show()
 
+
 def create_confusion_matrix(real_mask_lst, pred_mask_lst, n_classes):
     # Initialize the confusion matrix
     cm = np.zeros((n_classes, n_classes), dtype=int)
@@ -61,4 +62,6 @@ class MeanIoU(tf.keras.metrics.MeanIoU):
     def update_state(self, y_true, y_pred, sample_weight=None):
         # Convert logits to predicted class labels
         y_pred = tf.argmax(y_pred, axis=-1)
+        y_true = tf.argmax(y_true, axis=-1)
+
         return super().update_state(y_true, y_pred, sample_weight)
