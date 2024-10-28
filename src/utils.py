@@ -3,7 +3,6 @@ import matplotlib.pyplot as plt
 import tensorflow as tf
 import numpy as np
 
-
 def get_image_mask_list(path):
     """
     Get the list of images and masks in the path.
@@ -78,18 +77,3 @@ def create_confusion_matrix(real_mask_lst, pred_mask_lst, n_classes):
                 cm[true_class, predicted_class] += np.sum(np.logical_and(
                     real_mask == true_class, pred_mask == predicted_class))
     return cm
-
-class MeanIoU(tf.keras.metrics.MeanIoU):
-    """
-    This class extends the MeanIoU class from tf.keras.metrics.
-    """
-    def __init__(self, num_classes, name=None, dtype=None):
-        super(MeanIoU, self).__init__(num_classes=num_classes,
-                                      name=name, dtype=dtype)
-
-    def update_state(self, y_true, y_pred, sample_weight=None):
-        # Convert logits to predicted class labels
-        y_pred = tf.argmax(y_pred, axis=-1)
-        y_true = tf.argmax(y_true, axis=-1)
-
-        return super().update_state(y_true, y_pred, sample_weight)

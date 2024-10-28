@@ -87,51 +87,6 @@ class UnetModel(tf.keras.Model):
         model = tf.keras.Model(inputs=inputs, outputs=conv10)
         return model
 
-class DiceCCE(tf.keras.losses.Loss):
-    def __init__(self, from_logits=False, smooth=1e-16, alpha=0.5, name="combined_dice_cce_loss"):
-        """
-        Combined loss function of Dice Loss and Categorical Cross-Entropy.
-        Parameters:
-        - from_logits: Boolean, whether `y_pred` is from logits (raw values) or probabilities.
-        - smooth: Smoothing factor to prevent division by zero.
-        - alpha: Weighting factor to control the contribution of Dice loss and Categorical Cross-Entropy loss.
-        - name: Optional name for the loss function.
-        """
-        super().__init__(name=name)
-        self.from_logits = from_logits
-        self.smooth = smooth
-        self.alpha = alpha
-        self.cce = tf.keras.losses.CategoricalCrossentropy(from_logits=from_logits)
-
-    def dice_loss(self, y_true, y_pred):
-        """
-        Computes the generalized Dice loss.
-        Inputs:
-        - y_true: Ground truth labels, expected to be one-hot encoded.
-                  Shape: (batch_size, height, width, num_classes).
-        - y_pred: Predicted labels, can be logits or probabilities.
-                  Shape: (batch_size, height, width, num_classes).
-        Returns:
-        - loss: Computed Dice loss.
-        """
-        # If logits are passed, convert them to probabilities using softmax
-        if self.from_logits:
-            y_pred = tf.nn.softmax(y_pred)
-
-        num_classes = tf.shape(y_true)[-1]
-        y_true_f = tf.reshape(y_true, [-1, num_classes])
-        y_pred_f = tf.reshape(y_pred, [-1, num_classes])
-
-        y_true_f = tf.cast(y_true_f, tf.float32)
-        y_pred_f = tf.cast(y_pred_f, tf.float32)
-
-        intersection = tf.reduce_sum(y_true_f * y_pred_f, axis=0)
-        union = tf.reduce_sum(y_true_f, axis=0) + tf.reduce_sum(y_pred_f, axis=0)
-
-        dice_per_class = (2. * intersection + self.smooth) / (union + self.smooth)
-
-        return 1.0 - dice_per_class
-
     def call(self, y_true, y_pred):
         """
         Computes the combined Dice loss and Categorical Cross-Entropy loss.
@@ -155,28 +110,56 @@ class DiceCCE(tf.keras.losses.Loss):
         return combined_loss
 
 class DiceLoss(tf.keras.losses.Loss):
-    def __init__(self, from_logits=False, smooth=1e-16, name="dice_loss"):
+    def __init__(self, from_logits=False, smooth=1e-16, use_class_weights=False, name="dice_loss"):
         """
-        Custom Dice Loss function for multi-class segmentation.
+        Custom Dice Loss function for multi-class segmentation with optional class weights.
         Parameters:
         - from_logits: Boolean, whether `y_pred` is from logits (raw values) or probabilities.
         - smooth: Smoothing factor to prevent division by zero.
+        - use_class_weights: Boolean, whether to apply class weights based on `y_true`.
         - name: Optional name for the loss function.
         """
         super().__init__(name=name)
         self.from_logits = from_logits
         self.smooth = smooth
+        self.use_class_weights = use_class_weights
+
+    def compute_class_weights(self, y_true):
+        """
+        Computes class weights based on the number of voxels for each class.
+        Inputs:
+        - y_true: Ground truth labels, expected to be one-hot encoded.
+                  Shape: (batch_size, height, width, num_classes).
+        Returns:
+        - class_weights: A tensor of shape (num_classes,) representing class weights.
+        """
+        # Calculate the number of classes
+        num_classes = tf.shape(y_true)[-1]
+
+        # Calculate the number of voxels for each class (R_l)
+        voxel_counts_per_class = tf.reduce_sum(y_true, axis=[0, 1, 2])  # Sum over spatial dimensions
+
+        # Total number of voxels in the dataset (N)
+        total_voxels = tf.reduce_sum(voxel_counts_per_class)
+
+        # Calculate class weights: W = N / (L * |R_l| + 1)
+        class_weights = total_voxels / (tf.cast(num_classes, tf.float32) * voxel_counts_per_class + 1.0)
+
+        # Normalize the weights to sum to 1
+        class_weights /= tf.reduce_sum(class_weights)
+
+        return class_weights
 
     def call(self, y_true, y_pred):
         """
-        Computes the Dice loss.
+        Computes the Dice loss with optional class weights.
         Inputs:
         - y_true: Ground truth labels, expected to be one-hot encoded.
                   Shape: (batch_size, height, width, num_classes).
         - y_pred: Predicted labels, can be logits or probabilities.
                   Shape: (batch_size, height, width, num_classes).
         Returns:
-        - loss: Computed Dice loss.
+        - loss: Computed Dice loss with optional class weights.
         """
         # If logits are passed, convert them to probabilities using softmax
         if self.from_logits:
@@ -199,6 +182,148 @@ class DiceLoss(tf.keras.losses.Loss):
 
         # Compute Dice coefficient for each class
         dice_per_class = (2. * intersection + self.smooth) / (union + self.smooth)
+        dice_loss_per_class = 1.0 - dice_per_class  # Dice loss per class
 
-        # Return the Dice loss (1 - Dice coefficient)
-        return 1.0 - dice_per_class
+        # Optionally apply class weights if use_class_weights is True
+        if self.use_class_weights:
+            # Compute class weights based on the ground truth labels
+            class_weights = self.compute_class_weights(y_true)
+            # Weighted Dice loss: multiply each class loss by its weight
+            weighted_dice_loss = dice_loss_per_class * class_weights
+            return tf.reduce_mean(weighted_dice_loss)
+        else:
+            # Return the mean Dice loss if not using class weights
+            return tf.reduce_mean(dice_loss_per_class)
+
+class JaccardLoss(tf.keras.losses.Loss):
+    def __init__(self, from_logits=False, smooth=1e-16, use_class_weights=False,
+                 name="jaccard_loss"):
+        """
+        Custom Jaccard loss class for multi-class segmentation with optional class weights.
+        Parameters:
+        - from_logits: Boolean, whether `y_pred` is from logits (raw values) or probabilities.
+        - smooth: Smoothing factor to prevent division by zero and ensure numerical stability.
+        - use_class_weights: Boolean, whether to apply class weights based on `y_true`.
+        - name: Optional name for the loss function.
+        """
+        super().__init__(name=name)
+        self.from_logits = from_logits
+        self.smooth = smooth
+        self.use_class_weights = use_class_weights
+
+    def compute_class_weights(self, y_true):
+        """
+        Computes class weights based on the number of voxels for each class.
+        Inputs:
+        - y_true: Ground truth labels, expected to be one-hot encoded.
+                  Shape: (batch_size, height, width, num_classes).
+        Returns:
+        - class_weights: A tensor of shape (num_classes,) representing class weights.
+        """
+        # Calculate the number of classes
+        num_classes = tf.shape(y_true)[-1]
+
+        # Calculate the number of voxels for each class (R_l)
+        voxel_counts_per_class = tf.reduce_sum(y_true, axis=[0, 1, 2])  # Sum over spatial dimensions
+
+        # Total number of voxels in the dataset (N)
+        total_voxels = tf.reduce_sum(voxel_counts_per_class)
+
+        # Calculate class weights: W = N / (L * |R_l| + 1)
+        class_weights = total_voxels / (tf.cast(num_classes, tf.float32) * voxel_counts_per_class + 1.0)
+
+        # Normalize the weights to sum to 1 (optional, for numerical stability)
+        class_weights /= tf.reduce_sum(class_weights)
+
+        return class_weights
+
+    def call(self, y_true, y_pred):
+        """
+        Computes the custom Jaccard loss with optional class weights.
+        Inputs:
+        - y_true: Ground truth labels, expected to be one-hot encoded.
+                  Shape: (batch_size, height, width, num_classes).
+        - y_pred: Predicted labels, can be logits or probabilities.
+                  Shape: (batch_size, height, width, num_classes).
+        Returns:
+        - loss: Computed Jaccard loss with optional class weights.
+        """
+        # If logits are passed, convert them to probabilities using softmax
+        if self.from_logits:
+            y_pred = tf.nn.softmax(y_pred)
+
+        # Flatten the tensors for calculation
+        y_true_f = tf.reshape(y_true, [-1])
+        y_pred_f = tf.reshape(y_pred, [-1])
+
+        # Cast to float32 for computation
+        y_true_f = tf.cast(y_true_f, tf.float32)
+        y_pred_f = tf.cast(y_pred_f, tf.float32)
+
+        # Compute the intersection and union
+        intersection = tf.reduce_sum(y_true_f * y_pred_f)
+        union = tf.reduce_sum(y_true_f) + tf.reduce_sum(y_pred_f) - intersection
+
+        # Compute Jaccard index and Jaccard loss
+        jaccard_index = (intersection + self.smooth) / (union + self.smooth)
+        jaccard_loss = 1.0 - jaccard_index
+
+        # Optionally apply class weights if use_class_weights is True
+        if self.use_class_weights:
+            # Compute class weights based on the ground truth labels
+            class_weights = self.compute_class_weights(y_true)
+            # Multiply each class in y_true by its corresponding class weight
+            weights = tf.reduce_sum(class_weights * y_true, axis=-1)  # Sum weights for each class in each sample
+            weighted_loss = jaccard_loss * weights
+            return tf.reduce_mean(weighted_loss)
+        else:
+            # If not using class weights, return the standard Jaccard loss
+            return tf.reduce_mean(jaccard_loss)
+
+class CombinedLoss(tf.keras.losses.Loss):
+    def __init__(self, loss1, loss2, alpha=0.5, name="combined_loss"):
+        """
+        Custom combined loss function for combining two different loss functions.
+        Parameters:
+        - loss1: First loss function (instance of tf.keras.losses.Loss).
+        - loss2: Second loss function (instance of tf.keras.losses.Loss).
+        - alpha: Weighting factor for the first loss (0 <= alpha <= 1).
+        - name: Optional name for the loss function.
+        """
+        super().__init__(name=name)
+        self.loss1 = loss1
+        self.loss2 = loss2
+        self.alpha = alpha
+
+    def call(self, y_true, y_pred):
+        """
+        Computes the combined loss as a weighted sum of the two losses using alpha.
+        Inputs:
+        - y_true: Ground truth labels.
+        - y_pred: Predicted labels.
+        Returns:
+        - Combined loss value.
+        """
+        # Calculate each loss
+        loss1_value = self.loss1(y_true, y_pred)
+        loss2_value = self.loss2(y_true, y_pred)
+
+        # Combine the losses with alpha and (1 - alpha)
+        combined_loss = self.alpha * loss1_value + (1 - self.alpha) * loss2_value
+
+        return combined_loss
+
+class MeanIoU(tf.keras.metrics.MeanIoU):
+    """
+    This class extends the MeanIoU class from tf.keras.metrics.
+    """
+    def __init__(self, num_classes, name=None, dtype=None):
+        super(MeanIoU, self).__init__(num_classes=num_classes,
+                                      name=name, dtype=dtype)
+
+    def update_state(self, y_true, y_pred, sample_weight=None):
+        # Convert logits to predicted class labels
+        y_pred = tf.argmax(y_pred, axis=-1)
+        y_true = tf.argmax(y_true, axis=-1)
+
+        return super().update_state(y_true, y_pred, sample_weight)

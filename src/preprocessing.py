@@ -2,7 +2,6 @@ import numpy as np
 import tensorflow as tf
 from tensorflow.keras.layers import RandomRotation, RandomCrop, RandomFlip
 
-
 def create_shuffled_dataset(image_list, mask_list):
     """
     Create a shuffled dataset from the image and mask lists.
