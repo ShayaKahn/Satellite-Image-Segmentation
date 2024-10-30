@@ -10,7 +10,7 @@ class UnetModel(tf.keras.Model):
     """
     This class implements the U-Net model.
     Parameters:
-    - n_filters: The number of filters in the convolutional layers.
+    - n_filters: The minimal number of filters in the convolutional layers.
     - dropout_prob: The dropout probability.
     - max_pooling: Boolean, whether to use max pooling or not.
     - kernel_size: The size of the convolutional kernel.
@@ -26,6 +26,18 @@ class UnetModel(tf.keras.Model):
         self.kernel_size = kernel_size
         self.input_size = input_size
         self.n_classes = n_classes
+        if not isinstance(n_filters, int) or not n_filters >= 16 or not n_filters <= 64:
+            raise ValueError("n_filters must be a positive integer between 16 and 64.")
+        if not isinstance(dropout_prob, float) or not dropout_prob > 0 or not dropout_prob < 1:
+            raise ValueError("dropout_prob must be a positive float greater then 0 and smaller then 1.")
+        if not isinstance(max_pooling, bool):
+            raise ValueError("max_pooling must be a boolean.")
+        if not isinstance(kernel_size, int) or not kernel_size >= 3 or not kernel_size <= 5:
+            raise ValueError("kernel_size must be a positive integer between 3 and 5.")
+        if not isinstance(input_size, tuple) or not len(input_size) == 3:
+            raise ValueError("input_size must be a tuple of length 3.")
+        if not isinstance(n_classes, int) or not n_classes >= 2:
+            raise ValueError("n_classes must be a positive integer greater than 1.")
 
     def _conv_block(self, n_filters, inputs=None, dropout_prob=0,
                     max_pooling=True):
@@ -87,28 +99,6 @@ class UnetModel(tf.keras.Model):
         model = tf.keras.Model(inputs=inputs, outputs=conv10)
         return model
 
-    def call(self, y_true, y_pred):
-        """
-        Computes the combined Dice loss and Categorical Cross-Entropy loss.
-
-        Args:
-        - y_true: Ground truth labels.
-        - y_pred: Predicted labels.
-
-        Returns:
-        - loss: Combined loss (alpha * Dice loss + (1 - alpha) * Categorical Cross-Entropy loss).
-        """
-        # Calculate Dice loss
-        dice_loss_value = self.dice_loss(y_true, y_pred)
-
-        # Calculate Categorical Cross-Entropy loss
-        cce_loss_value = self.cce(y_true, y_pred)
-
-        # Combine the losses using the alpha weighting factor
-        combined_loss = self.alpha * dice_loss_value + (1 - self.alpha) * cce_loss_value
-
-        return combined_loss
-
 class DiceLoss(tf.keras.losses.Loss):
     def __init__(self, from_logits=False, smooth=1e-16, use_class_weights=False, name="dice_loss"):
         """
@@ -123,6 +113,12 @@ class DiceLoss(tf.keras.losses.Loss):
         self.from_logits = from_logits
         self.smooth = smooth
         self.use_class_weights = use_class_weights
+        if not isinstance(from_logits, bool):
+            raise ValueError("from_logits must be a boolean.")
+        if not isinstance(smooth, float) or not smooth > 0 or not smooth < 1e-5:
+            raise ValueError("smooth must be a positive float smaller then 1e-5.")
+        if not isinstance(use_class_weights, bool):
+            raise ValueError("use_class_weights must be a boolean.")
 
     def compute_class_weights(self, y_true):
         """
@@ -210,6 +206,12 @@ class JaccardLoss(tf.keras.losses.Loss):
         self.from_logits = from_logits
         self.smooth = smooth
         self.use_class_weights = use_class_weights
+        if not isinstance(from_logits, bool):
+            raise ValueError("from_logits must be a boolean.")
+        if not isinstance(smooth, float) or not smooth > 0 or not smooth < 1e-5:
+            raise ValueError("smooth must be a positive float smaller then 1e-5.")
+        if not isinstance(use_class_weights, bool):
+            raise ValueError("use_class_weights must be a boolean.")
 
     def compute_class_weights(self, y_true):
         """
@@ -294,6 +296,12 @@ class CombinedLoss(tf.keras.losses.Loss):
         self.loss1 = loss1
         self.loss2 = loss2
         self.alpha = alpha
+        if not isinstance(loss1, tf.keras.losses.Loss):
+            raise ValueError("loss1 must be an instance of tf.keras.losses.Loss.")
+        if not isinstance(loss2, tf.keras.losses.Loss):
+            raise ValueError("loss2 must be an instance of tf.keras.losses.Loss.")
+        if not isinstance(alpha, float) or not 0 <= alpha <= 1:
+            raise ValueError("alpha must be a float between 0 and 1.")
 
     def call(self, y_true, y_pred):
         """
