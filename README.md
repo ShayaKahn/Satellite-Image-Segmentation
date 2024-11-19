@@ -23,8 +23,6 @@ functions:
 1. Catagorical Crossentropy
 2. Dice Loss
 3. Jaccard Loss
-4. Weighted Dice Loss
-5. Weighted Jaccard Loss
 6. Combined Loss (Catagorical Crossentropy + Dice Loss/ Jaccard Loss)
 
 I measured the performance of the model using the mean IoU (Intersection over Union). The following table shows
@@ -36,23 +34,17 @@ the results:
 | Catagorical Crossentropy                         | 0.46                | 100         | 32         |
 | Catagorical Crossentropy + Dice Loss             | 0.53                | 100         | 32         |
 | Catagorical Crossentropy + Jaccard Loss          | 0.56                | 100         | 32         |
-| Catagorical Crossentropy + Weighted Dice Loss    |                     |
-| Catagorical Crossentropy + Weighted Jaccard Loss |                     |
 
 ### With Data Augmentation
 | Loss Function                                    | Mean IoU (test set) | # of Epochs | Batch Size |
 |--------------------------------------------------|---------------------|-------------|------------|
 | Catagorical Crossentropy                         | 0.5                 | 100         | 8          |
-| Catagorical Crossentropy + Dice Loss             |                     |
-| Catagorical Crossentropy + Jaccard Loss          |                     |
-| Catagorical Crossentropy + Weighted Dice Loss    |                     |
-| Catagorical Crossentropy + Weighted Jaccard Loss |                     |
+| Catagorical Crossentropy + Dice Loss             | 0.4                 | 100         | 8          |
+| Catagorical Crossentropy + Jaccard Loss          | 0.48                | 100         | 8          |
 
 ### With Image Split
-| Loss Function                                    | Mean IoU (test set) | # of Epochs |
-|--------------------------------------------------|--| --- |
-| Catagorical Crossentropy                         |  |              |  |
-| Catagorical Crossentropy + Dice Loss             |  |
-| Catagorical Crossentropy + Jaccard Loss          |  |
-| Catagorical Crossentropy + Weighted Dice Loss    |  |
-| Catagorical Crossentropy + Weighted Jaccard Loss |  |
+| Loss Function                                    | Mean IoU (test set) | # of Epochs | Batch Size |
+|--------------------------------------------------|---------------------|-------------|------------|
+| Catagorical Crossentropy                         | 0.52                | 100         | 8          |
+| Catagorical Crossentropy + Dice Loss             | 0.54 (0.57)         | 100 (125)   | 8          |
+| Catagorical Crossentropy + Jaccard Loss          | 0.55                | 100         | 8          |

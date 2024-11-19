@@ -55,25 +55,29 @@ def display_image_mask(display_list):
     plt.show()
 
 
-def create_confusion_matrix(real_mask_lst, pred_mask_lst, n_classes):
+def create_confusion_matrix(real_masks, pred_masks, n_classes):
     """
-    Create the confusion matrix.
+    Create the confusion matrix for multi-class segmentation masks.
+
     Inputs:
-    - real_mask_lst: A list of real masks.
-    - pred_mask_lst: A list of predicted masks.
+    - real_masks: A tensor of real masks with shape (m, m, n).
+    - pred_masks: A tensor of predicted masks with shape (m, m, n).
     - n_classes: The number of classes.
+
     Returns:
-    - cm: The confusion matrix.
+    - cm: The confusion matrix of shape (n_classes, n_classes).
     """
+    real_masks = np.argmax(real_masks, axis=-1)
+    pred_masks = np.argmax(pred_masks, axis=-1)
+
     # Initialize the confusion matrix
     cm = np.zeros((n_classes, n_classes), dtype=int)
 
-    # Iterate over each pair of real and predicted masks
-    for real_mask, pred_mask in zip(real_mask_lst, pred_mask_lst):
-        # Compute the confusion matrix
-        for true_class in range(n_classes):
-            for predicted_class in range(n_classes):
-                # Increment the confusion matrix for the true and predicted class combination
-                cm[true_class, predicted_class] += np.sum(np.logical_and(
-                    real_mask == true_class, pred_mask == predicted_class))
+    # Compute the confusion matrix
+    for true_class in range(n_classes):
+        for predicted_class in range(n_classes):
+            cm[true_class, predicted_class] += np.sum(
+                (real_masks == true_class) & (pred_masks == predicted_class)
+            )
+
     return cm
