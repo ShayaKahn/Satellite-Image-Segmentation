@@ -5,7 +5,7 @@ I used dataset consists of 803 satellite images and the corresponding masks (lab
 description chapter in the notebook. I used two preprocessing techniques:
 
 1. Data Augmentation:
-    - Random rotation
+    - Random brightness
     - Horizontal flip
     - Vertical flip
     - Random crop
@@ -39,7 +39,7 @@ the results:
 | Loss Function                                    | Mean IoU (test set) | # of Epochs | Batch Size |
 |--------------------------------------------------|---------------------|-------------|------------|
 | Catagorical Crossentropy                         | 0.5                 | 100         | 8          |
-| Catagorical Crossentropy + Dice Loss             | 0.4                 | 100         | 8          |
+| Catagorical Crossentropy + Dice Loss             | 0.53                | 100         | 32         |
 | Catagorical Crossentropy + Jaccard Loss          | 0.48                | 100         | 8          |
 
 ### With Image Split

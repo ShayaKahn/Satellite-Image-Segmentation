@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import RandomRotation, RandomCrop, RandomFlip, Resizing
+from tensorflow.keras.layers import RandomCrop, RandomFlip, Resizing
 
 def create_shuffled_dataset(image_list, mask_list):
     """
@@ -166,23 +166,23 @@ class Augment(tf.keras.layers.Layer):
     - target_height: The target height of the resized image.
     - target_width: The target width of the resized image.
     """
-    def __init__(self, seed=42, crop_height=96, crop_width=96, target_height=256, target_width=256):
+    def __init__(self, seed=42, crop_height=96, crop_width=96, target_height=256, target_width=256,
+                 brightness_delta=0.2):
         super().__init__()
+        self.brightness_delta = brightness_delta
 
         # Augmentation pipeline for images
         self.augment_image = tf.keras.Sequential([
             RandomFlip("horizontal_and_vertical", seed=seed),
-            RandomRotation(0.2, seed=seed),
             RandomCrop(crop_height, crop_width, seed=seed),
-            tf.keras.layers.Resizing(target_height, target_width, interpolation="bilinear")
+            Resizing(target_height, target_width, interpolation="bilinear")
         ])
 
         # Augmentation pipeline for masks (same augmentations to ensure consistency)
         self.augment_mask = tf.keras.Sequential([
             RandomFlip("horizontal_and_vertical", seed=seed),
-            RandomRotation(0.2, seed=seed),
             RandomCrop(crop_height, crop_width, seed=seed),
-            tf.keras.layers.Resizing(target_height, target_width, interpolation="nearest")
+            Resizing(target_height, target_width, interpolation="nearest")
         ])
 
     def call(self, image, mask):
@@ -195,14 +195,17 @@ class Augment(tf.keras.layers.Layer):
         - image: The augmented image tensor.
         - mask: The augmented mask tensor.
         """
-        # Apply augmentations
+        # Apply augmentations to the image
         image = self.augment_image(image)
+        image = tf.image.random_brightness(image, max_delta=self.brightness_delta)
         image = tf.cast(image, dtype=tf.float32)
 
+        # Apply augmentations to the mask
         mask = self.augment_mask(mask)
         mask = tf.cast(mask, dtype=tf.uint8)
 
         return image, mask
+
 
 def map_rgb_to_class(mask):
     """
