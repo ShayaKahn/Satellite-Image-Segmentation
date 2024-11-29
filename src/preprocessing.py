@@ -1,6 +1,6 @@
 import numpy as np
 import tensorflow as tf
-from tensorflow.keras.layers import RandomRotation, RandomCrop, RandomFlip
+from tensorflow.keras.layers import RandomRotation, RandomCrop, RandomFlip, Resizing
 
 def create_shuffled_dataset(image_list, mask_list):
     """
@@ -155,6 +155,7 @@ def split(train_frac, val_frac, dataset):
 
     return train_dataset, val_dataset, test_dataset, train_size, val_size
 
+
 class Augment(tf.keras.layers.Layer):
     """
     Custom layer to apply augmentations to images and masks.
@@ -173,7 +174,7 @@ class Augment(tf.keras.layers.Layer):
             RandomFlip("horizontal_and_vertical", seed=seed),
             RandomRotation(0.2, seed=seed),
             RandomCrop(crop_height, crop_width, seed=seed),
-            tf.keras.layers.Resizing(target_height, target_width)
+            tf.keras.layers.Resizing(target_height, target_width, interpolation="bilinear")
         ])
 
         # Augmentation pipeline for masks (same augmentations to ensure consistency)
@@ -181,7 +182,7 @@ class Augment(tf.keras.layers.Layer):
             RandomFlip("horizontal_and_vertical", seed=seed),
             RandomRotation(0.2, seed=seed),
             RandomCrop(crop_height, crop_width, seed=seed),
-            tf.keras.layers.Resizing(target_height, target_width)
+            tf.keras.layers.Resizing(target_height, target_width, interpolation="nearest")
         ])
 
     def call(self, image, mask):
